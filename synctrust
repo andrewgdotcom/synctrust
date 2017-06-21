@@ -1,0 +1,44 @@
+#!/bin/bash
+
+cmd_options=""
+if [ "$DISPLAY" == "" ]; then
+	cmd_options = "$cmd_options --no-use-agent"
+fi
+
+if [ "$1" == "getkeys" ]; then
+    echo "Getting new pubring entries from Dropbox. This may take some time..."
+
+    gpg $cmd_options --import ~/Dropbox/gpg/pubring-export.gpg
+fi
+
+echo "Syncing ownertrust changes from Dropbox..."
+
+cp ~/Dropbox/gpg/ownertrust.txt{,.gpg} ~/.gnupg/ 
+
+if gpg $cmd_options --verify ~/.gnupg/ownertrust.txt.gpg; then
+	gpg $cmd_options --import-ownertrust < ~/.gnupg/ownertrust.txt
+else
+	echo "SIGNATURE CHECK FAILED!"
+	echo -n "Not syncing from dropbox. Push local changes anyway? [y/N]"
+	read foo
+	if [[ ${foo-N} = "y" || ${foo-N} = "Y" ]]; then
+	        echo "Continuing..."
+	else
+	        exit 1
+	fi
+fi
+
+rm ~/.gnupg/ownertrust.txt{,.gpg}
+
+gpg $cmd_options --export-ownertrust > ~/.gnupg/ownertrust.txt
+gpg $cmd_options --sign ~/.gnupg/ownertrust.txt
+if gpg --verify ~/.gnupg/ownertrust.txt.gpg; then
+	gpg $cmd_options --export > ~/Dropbox/gpg/pubring-export.txt
+        cp -p ~/.gnupg/ownertrust.txt* ~/Dropbox/gpg/
+        echo "Pushed ownertrust"
+else
+        echo "Sanity check failed - not pushing ownertrust"
+fi
+
+rm ~/.gnupg/ownertrust.txt{,.gpg}
+
